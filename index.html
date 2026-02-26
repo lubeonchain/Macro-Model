@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MACRO MODEL</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Cormorant+SC:wght@300;400;500;600&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;cursor:none}
+
+/* ── CUSTOM CURSOR ─────────────────────── */
+#cursor{position:fixed;width:12px;height:12px;border:1px solid rgba(255,255,240,0.7);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:width .15s,height .15s,border-color .15s}
+#cursor-dot{position:fixed;width:3px;height:3px;background:rgba(255,255,240,0.9);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%)}
+#cursor.hovering{width:28px;height:28px;border-color:rgba(255,255,240,0.4)}
+#cursor.clicking{width:8px;height:8px}
+
+/* ── SPACE CANVAS ──────────────────────── */
+#space-canvas{position:fixed;inset:0;z-index:0}
+
+/* ── SPACE VIEW (the floating quads) ──── */
+#space-view{
+  position:fixed;inset:0;z-index:10;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .8s ease, transform 1.2s cubic-bezier(.4,0,.2,1);
+}
+
+#space-view.exiting{
+  opacity:0;
+  transform:scale(18) translateZ(0);
+}
+
+/* Masthead in space */
+#space-masthead{
+  position:absolute;top:40px;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;
+}
+#space-masthead h1{
+  font-family:'Cormorant SC',serif;
+  font-size:13px;letter-spacing:10px;font-weight:300;
+  color:rgba(220,216,190,0.85);
+  text-transform:uppercase;
+}
+#space-masthead .rule{
+  width:60px;height:1px;background:rgba(180,165,100,0.3);
+  margin:10px auto 0;
+}
+
+/* The 4 quad portals */
+#quad-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:32px;
+  padding:20px;
+  max-width:820px;
+  width:100%;
+}
+
+.quad-portal{
+  position:relative;
+  aspect-ratio:1/.9;
+  border:1px solid rgba(255,255,240,0.06);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:transform .3s ease, border-color .3s;
+  overflow:hidden;
+}
+
+/* Inner glow frame */
+.quad-portal::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 50%, rgba(255,255,240,0.015) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+/* Corner ticks */
+.quad-portal::after{
+  content:'';position:absolute;inset:8px;
+  border:1px solid rgba(255,255,240,0.04);
+  pointer-events:none;
+}
+
+/* LOCKED state */
+.quad-portal.locked{
+  cursor:not-allowed;
+}
+.quad-portal.locked .portal-inner{
+  opacity:0.18;
+  filter:blur(0.5px);
+}
+.locked-veil{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,0.55);
+  display:flex;align-items:center;justify-content:center;
+  z-index:5;
+}
+.lock-icon{
+  font-family:'Cormorant SC',serif;
+  font-size:9px;letter-spacing:4px;
+  color:rgba(255,255,240,0.35);
+}
+
+/* ACTIVE state */
+.quad-portal.active{
+  border-color:rgba(255,255,240,0.22);
+  cursor:pointer;
+}
+.quad-portal.active::before{
+  background:radial-gradient(ellipse at 50% 40%, rgba(255,255,240,0.04) 0%, transparent 65%);
+}
+.quad-portal.active:hover{
+  transform:scale(1.02);
+  border-color:rgba(255,255,240,0.4);
+}
+
+/* Animated glow lines on active */
+.active-glow{
+  position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden;
+}
+.active-glow::before{
+  content:'';position:absolute;
+  top:0;left:-100%;width:60%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,220,0.4),transparent);
+  animation:sweep-h 4s ease-in-out infinite;
+}
+.active-glow::after{
+  content:'';position:absolute;
+  left:0;top:-100%;height:60%;width:1px;
+  background:linear-gradient(180deg,transparent,rgba(255,255,220,0.3),transparent);
+  animation:sweep-v 5s ease-in-out infinite 1s;
+}
+@keyframes sweep-h{0%{left:-60%}100%{left:160%}}
+@keyframes sweep-v{0%{top:-60%}100%{top:160%}}
+
+.portal-inner{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:28px;text-align:center;
+  position:relative;z-index:3;
+  transition:opacity .3s;
+}
+
+.quad-roman{
+  font-family:'Cormorant SC',serif;
+  font-size:10px;letter-spacing:5px;font-weight:300;
+  color:rgba(200,185,120,0.9);
+}
+
+.quad-name{
+  font-family:'Cormorant SC',serif;
+  font-size:30px;letter-spacing:4px;font-weight:400;
+  color:rgba(245,242,228,0.75);
+  line-height:1;
+}
+.quad-portal.active .quad-name{
+  color:rgba(255,252,240,1);
+  text-shadow:0 0 40px rgba(255,255,220,0.2);
+}
+
+.quad-condition{
+  font-family:'Cormorant Garamond',serif;
+  font-style:italic;font-size:12px;
+  color:rgba(200,196,168,0.6);
+  line-height:1.5;
+}
+.quad-portal.active .quad-condition{
+  color:rgba(220,216,190,0.92);
+}
+
+.quad-axes{
+  font-family:'Cormorant SC',serif;
+  font-size:8px;letter-spacing:2px;
+  margin-top:6px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.axis-tag{
+  padding:2px 8px;border:1px solid;font-size:8px;letter-spacing:2px;
+  font-family:'Cormorant SC',serif;
+}
+.axis-tag.up{border-color:rgba(200,220,200,0.4);color:rgba(180,220,180,0.85)}
+.axis-tag.down{border-color:rgba(220,180,180,0.35);color:rgba(220,180,180,0.75)}
+
+/* ENTER prompt on active */
+.enter-prompt{
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:5px;
+  color:rgba(255,255,220,0.85);
+  animation:breathe 2.5s ease-in-out infinite;
+  z-index:4;
+}
+@keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* Status bar bottom */
+#status-bar{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  display:flex;gap:40px;align-items:center;pointer-events:none;
+}
+.status-item{
+  font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:3px;
+  color:rgba(200,185,120,0.8);
+  display:flex;align-items:center;gap:8px;
+}
+.status-item .val{color:rgba(255,252,240,0.95)}
+.status-dot{width:5px;height:5px;border-radius:50%;background:rgba(245,242,228,0.5);animation:breathe 3s infinite}
+
+/* ── WARP TRANSITION ───────────────────── */
+#warp-overlay{
+  position:fixed;inset:0;z-index:50;
+  pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at 50% 50%, rgba(255,255,240,0.0) 0%, rgba(255,255,240,0.0) 100%);
+  transition:opacity .3s;
+}
+#warp-overlay.warping{
+  animation:warp-flash .9s ease-out forwards;
+}
+@keyframes warp-flash{
+  0%{opacity:0}
+  30%{opacity:.7;background:radial-gradient(ellipse at 50% 50%, rgba(255,255,250,0.6) 0%, rgba(200,196,168,0.1) 60%, transparent 100%)}
+  100%{opacity:0}
+}
+
+/* ── DASHBOARD VIEW ────────────────────── */
+#dash-view{
+  position:fixed;inset:0;z-index:20;
+  overflow-y:auto;overflow-x:hidden;
+  opacity:0;pointer-events:none;
+  transition:opacity .6s ease .3s;
+  background:transparent;
+}
+#dash-view.visible{
+  opacity:1;pointer-events:all;
+}
+
+/* Parallax bg */
+#dash-view::before{
+  content:'';position:fixed;inset:0;z-index:-1;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(255,255,220,0.018) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 80% 70%, rgba(255,255,220,0.012) 0%, transparent 50%);
+}
+
+.dash-inner{
+  max-width:1160px;margin:0 auto;padding:0 40px 80px;
+}
+
+/* Dash header */
+.dash-header{
+  padding:44px 0 32px;
+  border-bottom:1px solid rgba(255,255,240,0.06);
+  margin-bottom:48px;
+  display:flex;justify-content:space-between;align-items:flex-end;
+}
+.dash-header-left{}
+.back-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:4px;
+  color:rgba(200,185,120,0.85);
+  cursor:pointer;margin-bottom:16px;
+  transition:color .2s;
+  background:none;border:none;
+}
+.back-btn:hover{color:rgba(255,252,240,1)}
+.back-btn::before{content:'←';font-family:serif;font-size:14px}
+.dash-regime-label{
+  font-family:'Cormorant SC',serif;font-size:10px;letter-spacing:5px;
+  color:rgba(200,185,120,0.85);margin-bottom:6px;
+}
+.dash-regime-name{
+  font-family:'Cormorant SC',serif;font-size:64px;letter-spacing:6px;font-weight:600;
+  color:rgba(255,252,240,1);line-height:1;
+}
+.dash-regime-sub{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;
+  color:rgba(210,195,140,0.95);margin-top:8px;
+}
+.dash-header-right{
+  text-align:right;display:flex;flex-direction:column;gap:6px;
+  position:relative;z-index:100;
+}
+.dash-meta-pill{
+  font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:3px;
+  color:rgba(220,210,170,0.85);
+  border:1px solid rgba(255,255,240,0.18);
+  padding:6px 14px;
+  display:flex;align-items:center;justify-content:flex-end;gap:10px;
+}
+.dash-meta-pill .v{color:rgba(255,252,240,1);font-size:16px;font-weight:600}
+.trend-arr{font-size:12px}
+.trend-down{color:rgba(160,220,160,0.95)}
+.trend-up{color:rgba(230,150,150,0.95)}
+
+/* Ornament line */
+.dash-rule{
+  width:100%;height:1px;
+  background:linear-gradient(90deg, rgba(180,165,100,0.4) 0%, transparent 50%);
+  margin:0 0 48px;
+}
+
+/* Data panels */
+.panels-row{
+  display:grid;gap:2px;margin-bottom:2px;
+}
+.panels-row.cols-3{grid-template-columns:1fr 1fr 1fr}
+.panels-row.cols-2{grid-template-columns:1.3fr 0.7fr}
+.panels-row.cols-1{grid-template-columns:1fr}
+
+.panel{
+  background:rgba(8,8,6,0.85);
+  border:1px solid rgba(255,255,240,0.055);
+  padding:28px 32px;
+  position:relative;
+  overflow:hidden;
+}
+.panel::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 0%, rgba(255,255,220,0.015) 0%, transparent 60%);
+  pointer-events:none;
+}
+
+.panel-eyebrow{
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:4px;
+  margin-bottom:16px;padding-bottom:12px;
+  border-bottom:1px solid rgba(255,255,240,0.08);
+  display:flex;align-items:center;gap:8px;
+}
+.panel-eyebrow.pos{color:rgba(160,220,160,0.95)}
+.panel-eyebrow.neg{color:rgba(230,150,150,0.9)}
+.panel-eyebrow.neu{color:rgba(210,195,140,0.9)}
+.panel-eyebrow.data{color:rgba(220,210,170,0.85)}
+
+.asset-list{display:flex;flex-direction:column;gap:6px}
+.asset-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:7px 0;
+  border-bottom:1px solid rgba(255,255,240,0.05);
+  font-family:'Cormorant Garamond',serif;font-size:15px;
+  color:rgba(255,252,240,0.95);
+}
+.asset-row:last-child{border-bottom:none}
+.asset-row .label{}
+.asset-row .badge{
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:2px;
+  padding:3px 9px;border:1px solid;
+}
+.badge.pos{border-color:rgba(160,220,160,0.45);color:rgba(160,220,160,0.95)}
+.badge.neg{border-color:rgba(230,150,150,0.4);color:rgba(230,150,150,0.9)}
+
+/* Big stat panel */
+.big-stat{text-align:center;padding:36px}
+.big-stat .bs-label{font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:4px;color:rgba(210,195,140,0.85);margin-bottom:10px}
+.big-stat .bs-val{font-family:'Cormorant SC',serif;font-size:48px;font-weight:600;color:rgba(255,252,240,1);line-height:1}
+.big-stat .bs-sub{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:rgba(210,200,160,0.75);margin-top:8px}
+
+/* sector tags */
+.sector-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.stag{
+  font-family:'Cormorant SC',serif;font-size:9px;letter-spacing:2px;
+  padding:4px 11px;border:1px solid;
+}
+.stag.pos{border-color:rgba(160,220,160,0.35);color:rgba(180,235,180,0.95)}
+.stag.neg{border-color:rgba(230,150,150,0.3);color:rgba(235,160,160,0.9)}
+
+/* Policy box */
+.policy-text{
+  font-family:'Cormorant Garamond',serif;font-size:15px;font-style:italic;
+  color:rgba(220,210,170,0.9);line-height:1.9;
+}
+.policy-text strong{font-style:normal;color:rgba(255,252,240,1);font-weight:600}
+
+/* History mini table */
+.hist-table{width:100%;border-collapse:collapse;margin-top:8px}
+.hist-table th{
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:2px;
+  color:rgba(210,195,140,0.85);text-align:left;
+  padding:8px 12px;border-bottom:1px solid rgba(255,255,240,0.08);
+}
+.hist-table td{
+  font-family:'Cormorant Garamond',serif;font-size:14px;
+  color:rgba(220,210,180,0.92);
+  padding:10px 12px;border-bottom:1px solid rgba(255,255,240,0.04);
+}
+.hist-table tr:last-child td{border-bottom:none}
+.hist-table .q-stamp{
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:1px;
+  padding:2px 8px;border:1px solid rgba(255,255,240,0.25);
+  color:rgba(255,252,240,0.9);
+}
+
+/* Update row */
+.update-row{
+  display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;
+  margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,240,0.05);
+}
+.uf{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px}
+.uf label{font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:3px;color:rgba(210,195,140,0.85)}
+.uf input{
+  background:rgba(0,0,0,0.5);border:none;border-bottom:1px solid rgba(255,255,240,0.25);
+  padding:8px 4px;color:rgba(255,252,240,1);
+  font-family:'Cormorant SC',serif;font-size:16px;letter-spacing:1px;
+  outline:none;width:100%;transition:border-color .2s;
+}
+.uf input:focus{border-color:rgba(220,210,170,0.7)}
+.uf-btn{
+  background:rgba(255,252,240,1);border:none;
+  padding:9px 24px;
+  font-family:'Cormorant SC',serif;font-size:10px;letter-spacing:3px;
+  color:#080806;cursor:pointer;white-space:nowrap;
+  transition:background .2s;
+}
+.uf-btn:hover{background:#fff}
+
+/* scroll indicator */
+.scroll-hint{
+  position:fixed;bottom:28px;right:36px;z-index:25;
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:3px;
+  color:rgba(210,195,140,0.6);
+  animation:breathe 3s infinite;
+  pointer-events:none;
+}
+
+/* ── STARS BG ──────────────────────────── */
+.star{position:absolute;border-radius:50%;background:rgba(255,255,240,0.8)}
+
+/* ── TOOLTIP ARROW ─────────────────────── */
+.tooltip-anchor{
+  position:relative;
+  display:inline-flex;align-items:center;
+  cursor:help;
+}
+.tooltip-anchor .trend-arr{
+  border-bottom:1px dashed rgba(255,255,240,0.2);
+  transition:border-color .2s, color .2s;
+}
+.tooltip-anchor:hover .trend-arr{
+  border-color:rgba(255,255,220,0.6);
+  color:rgba(255,255,220,1) !important;
+}
+
+.data-tooltip{
+  position:absolute;
+  top:calc(100% + 14px);
+  right:0;
+  width:320px;
+  background:rgba(6,6,4,0.97);
+  border:1px solid rgba(255,255,240,0.12);
+  padding:0;
+  z-index:9999;
+  pointer-events:none;
+  opacity:0;
+  transform:translateY(6px);
+  transition:opacity .22s ease, transform .22s ease;
+  box-shadow:0 20px 60px rgba(0,0,0,0.8);
+}
+.tooltip-anchor:hover .data-tooltip{
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* small caret pointing up */
+.data-tooltip::before{
+  content:'';
+  position:absolute;
+  top:-6px;right:18px;
+  width:10px;height:10px;
+  background:rgba(6,6,4,0.97);
+  border-top:1px solid rgba(255,255,240,0.12);
+  border-left:1px solid rgba(255,255,240,0.12);
+  transform:rotate(45deg);
+}
+
+.tt-header{
+  padding:14px 18px 10px;
+  border-bottom:1px solid rgba(255,255,240,0.06);
+  display:flex;justify-content:space-between;align-items:baseline;
+}
+.tt-label{
+  font-family:'Cormorant SC',serif;font-size:8px;letter-spacing:3px;
+  color:rgba(210,195,140,0.85);
+}
+.tt-value{
+  font-family:'Cormorant SC',serif;font-size:18px;font-weight:600;
+  color:rgba(255,252,240,1);
+}
+.tt-body{
+  padding:14px 18px 16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.tt-row{
+  display:flex;flex-direction:column;gap:3px;
+}
+.tt-row-label{
+  font-family:'Cormorant SC',serif;font-size:7px;letter-spacing:3px;
+  color:rgba(210,195,140,0.8);
+}
+.tt-row-val{
+  font-family:'Cormorant Garamond',serif;font-size:13.5px;
+  color:rgba(220,210,180,0.95);line-height:1.55;
+}
+.tt-row-val strong{
+  font-weight:600;font-style:normal;
+  color:rgba(255,252,240,1);
+}
+.tt-divider{
+  height:1px;background:rgba(255,255,240,0.07);
+  margin:2px 0;
+}
+.tt-verdict{
+  padding:10px 18px 14px;
+  border-top:1px solid rgba(255,255,240,0.08);
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;
+  color:rgba(210,195,140,0.9);line-height:1.6;
+}
+.tt-verdict strong{font-style:normal;color:rgba(255,252,240,1);font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-dot"></div>
+<canvas id="space-canvas"></canvas>
+<div id="warp-overlay"></div>
+
+<!-- ╔══════════════════════════════════════╗
+     ║        SPACE VIEW — 4 QUADS          ║
+     ╚══════════════════════════════════════╝ -->
+<div id="space-view">
+
+  <div id="space-masthead">
+    <h1>Macro Model</h1>
+    <div class="rule"></div>
+    <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:11px;letter-spacing:2px;color:rgba(180,165,100,0.4);margin-top:8px;">powered by developer dru</div>
+  </div>
+
+  <div id="quad-grid">
+
+    <!-- Q1 Goldilocks -->
+    <div class="quad-portal locked" id="portal-1" data-quad="1">
+      <div class="portal-inner">
+        <div class="quad-roman">I</div>
+        <div class="quad-name">Goldilocks</div>
+        <div class="quad-condition">Growth Accelerating<br>Inflation Decelerating</div>
+        <div class="quad-axes">
+          <span class="axis-tag up">GDP ▲ &nbsp; CPI ▼</span>
+        </div>
+      </div>
+      <div class="locked-veil"><div class="lock-icon">NOT ACTIVE</div></div>
+    </div>
+
+    <!-- Q2 Reflation -->
+    <div class="quad-portal locked" id="portal-2" data-quad="2">
+      <div class="portal-inner">
+        <div class="quad-roman">II</div>
+        <div class="quad-name">Reflation</div>
+        <div class="quad-condition">Growth Accelerating<br>Inflation Accelerating</div>
+        <div class="quad-axes">
+          <span class="axis-tag up">GDP ▲ &nbsp; CPI ▲</span>
+        </div>
+      </div>
+      <div class="locked-veil"><div class="lock-icon">NOT ACTIVE</div></div>
+    </div>
+
+    <!-- Q3 Stagflation -->
+    <div class="quad-portal locked" id="portal-3" data-quad="3">
+      <div class="portal-inner">
+        <div class="quad-roman">III</div>
+        <div class="quad-name">Stagflation</div>
+        <div class="quad-condition">Growth Slowing<br>Inflation Accelerating</div>
+        <div class="quad-axes">
+          <span class="axis-tag down">GDP ▼ &nbsp; CPI ▲</span>
+        </div>
+      </div>
+      <div class="locked-veil"><div class="lock-icon">NOT ACTIVE</div></div>
+    </div>
+
+    <!-- Q4 Deflation -->
+    <div class="quad-portal locked" id="portal-4" data-quad="4">
+      <div class="portal-inner">
+        <div class="quad-roman">IV</div>
+        <div class="quad-name">Deflation</div>
+        <div class="quad-condition">Growth Slowing<br>Inflation Decelerating</div>
+        <div class="quad-axes">
+          <span class="axis-tag down">GDP ▼ &nbsp; CPI ▼</span>
+        </div>
+      </div>
+      <div class="locked-veil"><div class="lock-icon">NOT ACTIVE</div></div>
+    </div>
+
+  </div>
+
+  <div id="status-bar">
+    <div class="status-item"><span class="status-dot"></span>CPI YoY<span class="val" id="sb-cpi">2.4%</span></div>
+    <div class="status-item">|</div>
+    <div class="status-item">Real GDP YoY<span class="val" id="sb-gdp">2.23%</span></div>
+    <div class="status-item">|</div>
+    <div class="status-item">Active Regime<span class="val" id="sb-regime">QUAD IV</span></div>
+  </div>
+
+</div><!-- /space-view -->
+
+
+<!-- ╔══════════════════════════════════════╗
+     ║         DASHBOARD VIEW               ║
+     ╚══════════════════════════════════════╝ -->
+<div id="dash-view">
+  <div class="dash-inner">
+
+    <div class="dash-header">
+      <div class="dash-header-left">
+        <button class="back-btn" onclick="exitDash()">Return to Space</button>
+        <div class="dash-regime-label">Active Economic Regime</div>
+        <div class="dash-regime-name" id="d-name">Deflation</div>
+        <div class="dash-regime-sub" id="d-sub">Growth Slowing · Inflation Decelerating · Policy: Dovish</div>
+      </div>
+      <div class="dash-header-right">
+
+        <!-- CPI pill with tooltip -->
+        <div class="dash-meta-pill">
+          CPI YoY &nbsp;
+          <span class="v" id="d-cpi">2.4%</span>
+          <span class="tooltip-anchor">
+            <span class="trend-arr trend-down" id="d-cpi-arr">▾</span>
+            <div class="data-tooltip" id="cpi-tooltip">
+              <div class="tt-header">
+                <span class="tt-label">Headline CPI · YoY</span>
+                <span class="tt-value" id="tt-cpi-val">2.4%</span>
+              </div>
+              <div class="tt-body">
+                <div class="tt-row">
+                  <div class="tt-row-label">Latest Release</div>
+                  <div class="tt-row-val" id="tt-cpi-release"><strong>January 2026</strong> — BLS, released Feb 13 2026</div>
+                </div>
+                <div class="tt-divider"></div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Prior Reading</div>
+                  <div class="tt-row-val" id="tt-cpi-prior"><strong>2.7%</strong> — December 2025</div>
+                </div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Change (First Difference)</div>
+                  <div class="tt-row-val" id="tt-cpi-delta"><strong>−0.3pp</strong> — Inflation decelerating</div>
+                </div>
+                <div class="tt-divider"></div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Data Notes</div>
+                  <div class="tt-row-val" id="tt-cpi-notes">January print slightly distorted downward by government shutdown data-collection gap. BLS expects distortion to clear by April 2026. Next release: ~March 12, 2026.</div>
+                </div>
+              </div>
+              <div class="tt-verdict" id="tt-cpi-verdict">
+                Inflation is <strong>decelerating</strong>. The direction of this delta is what determines the x-axis of the regime model — pointing left toward Quad I or IV.
+              </div>
+            </div>
+          </span>
+        </div>
+
+        <!-- GDP pill with tooltip -->
+        <div class="dash-meta-pill">
+          Real GDP YoY &nbsp;
+          <span class="v" id="d-gdp">2.23%</span>
+          <span class="tooltip-anchor">
+            <span class="trend-arr trend-down" id="d-gdp-arr">▾</span>
+            <div class="data-tooltip" id="gdp-tooltip">
+              <div class="tt-header">
+                <span class="tt-label">Real GDP · YoY</span>
+                <span class="tt-value" id="tt-gdp-val">2.23%</span>
+              </div>
+              <div class="tt-body">
+                <div class="tt-row">
+                  <div class="tt-row-label">Latest Release</div>
+                  <div class="tt-row-val" id="tt-gdp-release"><strong>Q4 2025 Advance Estimate</strong> — BEA, released Feb 20 2026</div>
+                </div>
+                <div class="tt-divider"></div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Prior Reading</div>
+                  <div class="tt-row-val" id="tt-gdp-prior"><strong>2.33%</strong> — Q3 2025 YoY</div>
+                </div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Change (First Difference)</div>
+                  <div class="tt-row-val" id="tt-gdp-delta"><strong>−0.10pp</strong> — Growth slowing</div>
+                </div>
+                <div class="tt-divider"></div>
+                <div class="tt-row">
+                  <div class="tt-row-label">Data Notes</div>
+                  <div class="tt-row-val" id="tt-gdp-notes">Q4 annualized QoQ was 1.4% — below 3.0% forecast. Shortfall driven by government shutdown cutting federal spending 17%. Still an advance estimate; second estimate due March 13, 2026.</div>
+                </div>
+              </div>
+              <div class="tt-verdict" id="tt-gdp-verdict">
+                Growth is <strong>slowing</strong>. The direction of this delta determines the y-axis — pointing down toward Quad III or IV.
+              </div>
+            </div>
+          </span>
+        </div>
+
+        <div class="dash-meta-pill">
+          Monetary Bias &nbsp;
+          <span class="v" id="d-bias">Dovish</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-rule"></div>
+
+    <!-- Row 1: Asset Classes + Policy -->
+    <div class="panels-row cols-3" style="margin-bottom:2px">
+
+      <div class="panel">
+        <div class="panel-eyebrow pos">★ Best Asset Classes</div>
+        <div class="asset-list" id="d-best-assets"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-eyebrow neg">✗ Worst Asset Classes</div>
+        <div class="asset-list" id="d-worst-assets"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-eyebrow neu">⊕ Policy Environment</div>
+        <div class="policy-text" id="d-policy-text"></div>
+      </div>
+
+    </div>
+
+    <!-- Row 2: Sectors -->
+    <div class="panels-row cols-2" style="margin-bottom:2px">
+
+      <div class="panel">
+        <div class="panel-eyebrow pos">★ Best Equity Sectors</div>
+        <div class="sector-tags" id="d-best-sectors"></div>
+        <div style="margin-top:20px">
+          <div class="panel-eyebrow neg" style="border-top:1px solid rgba(255,255,240,0.04);padding-top:16px;margin-top:4px">✗ Worst Equity Sectors</div>
+          <div class="sector-tags" id="d-worst-sectors"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-eyebrow neu">◆ Best Style Factors</div>
+        <div class="asset-list" id="d-best-factors"></div>
+      </div>
+
+    </div>
+
+    <!-- Row 3: Fixed Income + Key Stats -->
+    <div class="panels-row cols-3" style="margin-bottom:2px">
+
+      <div class="panel">
+        <div class="panel-eyebrow pos">★ Best Fixed Income</div>
+        <div class="asset-list" id="d-best-fi"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-eyebrow neg">✗ Worst Fixed Income</div>
+        <div class="asset-list" id="d-worst-fi"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-eyebrow neg">◆ Worst Style Factors</div>
+        <div class="asset-list" id="d-worst-factors"></div>
+      </div>
+
+    </div>
+
+    <!-- Row 4: Update data + History -->
+    <div class="panels-row cols-1" style="margin-bottom:2px">
+      <div class="panel">
+        <div class="panel-eyebrow data">⟳ Update Model Data</div>
+        <div class="update-row">
+          <div class="uf"><label>CPI YoY Current (%)</label><input type="number" id="u-cpi-now" step="0.1" value="2.4"></div>
+          <div class="uf"><label>CPI YoY Prior (%)</label><input type="number" id="u-cpi-prev" step="0.1" value="2.7"></div>
+          <div class="uf"><label>GDP YoY Current (%)</label><input type="number" id="u-gdp-now" step="0.01" value="2.23"></div>
+          <div class="uf"><label>GDP YoY Prior (%)</label><input type="number" id="u-gdp-prev" step="0.01" value="2.33"></div>
+          <button class="uf-btn" onclick="updateData()">Recalculate</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 5: History -->
+    <div class="panels-row cols-1">
+      <div class="panel">
+        <div class="panel-eyebrow data">§ Historical Record</div>
+        <table class="hist-table">
+          <thead>
+            <tr>
+              <th>Period</th><th>CPI YoY</th><th>GDP YoY</th>
+              <th>CPI Δ</th><th>GDP Δ</th><th>Quad</th><th>Regime</th>
+            </tr>
+          </thead>
+          <tbody id="hist-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /dash-view -->
+
+<div class="scroll-hint" id="scroll-hint" style="display:none">SCROLL</div>
+
+<script>
+/* ══════════════════════════════════════════
+   MODEL DATA
+══════════════════════════════════════════ */
+const PB = {
+  1:{
+    name:'Goldilocks',roman:'I',
+    condition:'Growth Accelerating · Inflation Decelerating',
+    policy:'Neutral', bias:'Neutral',
+    bestA:[['Fixed Income','Underweight'],['Equities','Overweight'],['Credit','Overweight'],['Commodities','Overweight'],['FX','Overweight']],
+    worstA:[['Fixed Income','Underweight'],['USD','Underweight']],
+    bestS:['Tech','Consumer Disc.','Materials','Industrials','Telecom'],
+    worstS:['Utilities','REITs','Staples','Financials','Energy'],
+    bestF:[['High Beta','Factor'],['Momentum','Factor'],['Leverage','Factor'],['Secular Growth','Factor'],['Mid Caps','Factor']],
+    worstF:[['Low Beta','Avoid'],['Defensives','Avoid'],['Value','Avoid'],['Dividend Yield','Avoid'],['Small Caps','Avoid']],
+    bestFI:[['BDCs','Long'],['Convertibles','Long'],['HY Credit','Long'],['EM $ Debt','Long'],['Leveraged Loans','Long']],
+    worstFI:[['TIPS','Short'],['Short Duration Treasuries','Short'],['MBS','Short'],['Treasury Belly','Short'],['Long Bond','Short']],
+    policyHtml:'Policy is on <strong>hold</strong> — the goldilocks environment supports risk. The Fed operates with a <strong>neutral bias</strong>, neither hawkish nor dovish. Dollar typically <strong>weakens</strong>. Equities and credit lead. Avoid long-duration fixed income.'
+  },
+  2:{
+    name:'Reflation',roman:'II',
+    condition:'Growth Accelerating · Inflation Accelerating',
+    policy:'Hawkish', bias:'Hawkish',
+    bestA:[['Commodities','Overweight'],['Equities','Overweight'],['Credit','Overweight'],['FX','Overweight']],
+    worstA:[['Fixed Income','Underweight'],['USD','Underweight']],
+    bestS:['Tech','Consumer Disc.','Industrials','Energy','Financials'],
+    worstS:['Telecom','Utilities','REITs','Staples','Health Care'],
+    bestF:[['Secular Growth','Factor'],['High Beta','Factor'],['Small Caps','Factor'],['Cyclical Growth','Factor'],['Momentum','Factor']],
+    worstF:[['Low Beta','Avoid'],['Dividend Yield','Avoid'],['Value','Avoid'],['Defensives','Avoid'],['Size','Avoid']],
+    bestFI:[['Convertibles','Long'],['BDCs','Long'],['Preferreds','Long'],['Leveraged Loans','Long'],['HY Credit','Long']],
+    worstFI:[['Long Bond','Short'],['Treasury Belly','Short'],['Munis','Short'],['MBS','Short'],['IG Credit','Short']],
+    policyHtml:'Fed leaning <strong>hawkish</strong> — rate hike risk is real. Nominal growth is strong. <strong>Commodities lead</strong> all asset classes. Own cyclicals and short-duration fixed income. Inflation premium is embedded in yields.'
+  },
+  3:{
+    name:'Stagflation',roman:'III',
+    condition:'Growth Slowing · Inflation Accelerating',
+    policy:'Neutral', bias:'Neutral',
+    bestA:[['Gold','Overweight'],['Commodities','Overweight'],['Fixed Income','Selective']],
+    worstA:[['Credit','Underweight']],
+    bestS:['Utilities','Tech','Energy','Industrials','Consumer Disc.'],
+    worstS:['Financials','REITs','Materials','Telecom','Staples'],
+    bestF:[['Secular Growth','Factor'],['Momentum','Factor'],['Mid Caps','Factor'],['Low Beta','Factor'],['Quality','Factor']],
+    worstF:[['Small Caps','Avoid'],['Dividend Yield','Avoid'],['Value','Avoid'],['Defensives','Avoid'],['Size','Avoid']],
+    bestFI:[['Munis','Long'],['EM $ Debt','Long'],['Long Bond','Long'],['TIPS','Long'],['Treasury Belly','Long']],
+    worstFI:[['BDCs','Short'],['Preferreds','Short'],['Convertibles','Short'],['Leveraged Loans','Short'],['HY Credit','Short']],
+    policyHtml:'Fed is in a <strong>policy bind</strong> — cannot easily address both slowing growth and rising inflation. <strong>Gold</strong> is the primary hedge. Avoid credit spreads. Real assets outperform. Equity risk is significant.'
+  },
+  4:{
+    name:'Deflation',roman:'IV',
+    condition:'Growth Slowing · Inflation Decelerating',
+    policy:'Dovish', bias:'Dovish',
+    bestA:[['Fixed Income','Overweight'],['Gold','Overweight'],['USD','Overweight']],
+    worstA:[['Commodities','Underweight'],['Equities','Underweight'],['Credit','Underweight'],['FX','Underweight']],
+    bestS:['Staples','Utilities','REITs','Health Care','Telecom'],
+    worstS:['Energy','Tech','Industrials','Financials','Materials'],
+    bestF:[['Low Beta','Factor'],['Dividend Yield','Factor'],['Quality','Factor'],['Defensives','Factor'],['Value','Factor']],
+    worstF:[['High Beta','Avoid'],['Momentum','Avoid'],['Leverage','Avoid'],['Secular Growth','Avoid'],['Cyclical Growth','Avoid']],
+    bestFI:[['Long Bond','Long'],['Treasury Belly','Long'],['IG Credit','Long'],['Munis','Long'],['MBS','Long']],
+    worstFI:[['Preferreds','Short'],['EM Local Currency','Short'],['BDCs','Short'],['Leveraged Loans','Short'],['TIPS','Short']],
+    policyHtml:'Fed is <strong>dovish</strong> — rate cuts are on the horizon. Long-duration bonds lead all asset classes. <strong>USD strengthens</strong>. Gold performs well. Avoid cyclicals, commodities, and credit. Defensives and quality factors dominate.'
+  }
+};
+
+const romanNums=['','I','II','III','IV'];
+const quadNames=['','Goldilocks','Reflation','Stagflation','Deflation'];
+
+let state = {
+  cpiNow:2.4, cpiPrev:2.7,
+  gdpNow:2.23, gdpPrev:2.33,
+  activeQuad:4
+};
+
+let history=[
+  {period:'Q2 2024', cpi:3.0, gdp:2.9, cpiP:3.2, gdpP:2.7},
+  {period:'Q3 2024', cpi:2.6, gdp:2.7, cpiP:3.0, gdpP:2.9},
+  {period:'Q4 2024', cpi:2.7, gdp:2.5, cpiP:2.6, gdpP:2.7},
+  {period:'Q1 2025', cpi:2.8, gdp:2.0, cpiP:2.7, gdpP:2.5},
+  {period:'Q2 2025', cpi:2.5, gdp:2.4, cpiP:2.8, gdpP:2.0},
+  {period:'Q3 2025', cpi:2.7, gdp:2.33, cpiP:2.5, gdpP:2.4},
+  {period:'Jan 2026', cpi:2.4, gdp:2.23, cpiP:2.7, gdpP:2.33},
+];
+
+function calcQuad(c,cp,g,gp){
+  const cd=c-cp, gd=g-gp;
+  if(gd>=0&&cd<=0) return 1;
+  if(gd>=0&&cd>0)  return 2;
+  if(gd<0 &&cd>0)  return 3;
+  return 4;
+}
+
+/* ══════════════════════════════════════════
+   STAR FIELD
+══════════════════════════════════════════ */
+(function initStars(){
+  const canvas=document.getElementById('space-canvas');
+  const ctx=canvas.getContext('2d');
+  let stars=[];
+  let W,H;
+
+  function resize(){
+    W=canvas.width=window.innerWidth;
+    H=canvas.height=window.innerHeight;
+  }
+
+  function mkStars(){
+    stars=[];
+    for(let i=0;i<320;i++){
+      const depth=Math.random();
+      stars.push({
+        x:Math.random()*W, y:Math.random()*H,
+        r:Math.random()*1.1*depth+0.2,
+        a:Math.random()*0.6+0.1,
+        speed:depth*0.06+0.01,
+        twinkle:Math.random()*Math.PI*2,
+        twinkleSpeed:Math.random()*0.015+0.005
+      });
+    }
+  }
+
+  let mouseX=W/2||window.innerWidth/2, mouseY=H/2||window.innerHeight/2;
+  document.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY});
+
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#000000';
+    ctx.fillRect(0,0,W,H);
+
+    // very faint nebula
+    const gx=W*0.3, gy=H*0.4;
+    const rad=ctx.createRadialGradient(gx,gy,0,gx,gy,W*0.5);
+    rad.addColorStop(0,'rgba(200,196,168,0.012)');
+    rad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=rad; ctx.fillRect(0,0,W,H);
+
+    const rad2=ctx.createRadialGradient(W*0.7,H*0.6,0,W*0.7,H*0.6,W*0.4);
+    rad2.addColorStop(0,'rgba(180,170,140,0.008)');
+    rad2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=rad2; ctx.fillRect(0,0,W,H);
+
+    // parallax offset
+    const ox=(mouseX-W/2)*0.008;
+    const oy=(mouseY-H/2)*0.008;
+
+    frame++;
+    stars.forEach(s=>{
+      s.twinkle+=s.twinkleSpeed;
+      const alpha=s.a*(0.6+0.4*Math.sin(s.twinkle));
+      ctx.beginPath();
+      ctx.arc(s.x+ox*s.speed*10, s.y+oy*s.speed*10, s.r, 0, Math.PI*2);
+      ctx.fillStyle=`rgba(245,242,228,${alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+
+  resize(); mkStars(); draw();
+  window.addEventListener('resize',()=>{resize();mkStars()});
+})();
+
+/* ══════════════════════════════════════════
+   CURSOR
+══════════════════════════════════════════ */
+(function(){
+  const cur=document.getElementById('cursor');
+  const dot=document.getElementById('cursor-dot');
+  let cx=0,cy=0,tx=0,ty=0;
+  document.addEventListener('mousemove',e=>{tx=e.clientX;ty=e.clientY;dot.style.left=tx+'px';dot.style.top=ty+'px'});
+  function loop(){
+    cx+=(tx-cx)*0.12; cy+=(ty-cy)*0.12;
+    cur.style.left=cx+'px'; cur.style.top=cy+'px';
+    requestAnimationFrame(loop);
+  }
+  loop();
+  document.addEventListener('mouseover',e=>{if(e.target.matches('.quad-portal.active,.back-btn,.uf-btn'))cur.classList.add('hovering');else cur.classList.remove('hovering')});
+  document.addEventListener('mousedown',()=>cur.classList.add('clicking'));
+  document.addEventListener('mouseup',()=>cur.classList.remove('clicking'));
+})();
+
+/* ══════════════════════════════════════════
+   PORTAL SETUP
+══════════════════════════════════════════ */
+function activatePortal(q){
+  for(let i=1;i<=4;i++){
+    const p=document.getElementById('portal-'+i);
+    const veil=p.querySelector('.locked-veil');
+    if(i===q){
+      p.classList.remove('locked');
+      p.classList.add('active');
+      veil.innerHTML='<div class="enter-prompt">Enter</div>';
+      veil.style.background='transparent';
+      // add glow
+      const g=document.createElement('div');
+      g.className='active-glow';
+      p.appendChild(g);
+      p.onclick=()=>enterQuad(q);
+    } else {
+      p.classList.add('locked');
+      p.classList.remove('active');
+      p.onclick=null;
+    }
+  }
+  // update status bar
+  document.getElementById('sb-cpi').textContent=state.cpiNow.toFixed(1)+'%';
+  document.getElementById('sb-gdp').textContent=state.gdpNow.toFixed(2)+'%';
+  document.getElementById('sb-regime').textContent='QUAD '+romanNums[q]+' · '+quadNames[q].toUpperCase();
+}
+
+/* ══════════════════════════════════════════
+   ENTER / EXIT TRANSITIONS
+══════════════════════════════════════════ */
+function enterQuad(q){
+  // Warp flash
+  const overlay=document.getElementById('warp-overlay');
+  overlay.classList.add('warping');
+
+  // Space view zooms into portal
+  const spaceView=document.getElementById('space-view');
+  spaceView.classList.add('exiting');
+
+  setTimeout(()=>{
+    populateDash(q);
+    overlay.classList.remove('warping');
+    spaceView.style.display='none';
+
+    const dash=document.getElementById('dash-view');
+    dash.classList.add('visible');
+    document.getElementById('scroll-hint').style.display='block';
+    document.body.style.overflowY='auto';
+    document.body.style.overflowX='hidden';
+  },700);
+}
+
+function exitDash(){
+  const dash=document.getElementById('dash-view');
+  dash.classList.remove('visible');
+  document.getElementById('scroll-hint').style.display='none';
+  document.body.style.overflow='hidden';
+
+  setTimeout(()=>{
+    const spaceView=document.getElementById('space-view');
+    spaceView.style.display='flex';
+    spaceView.classList.remove('exiting');
+    dash.scrollTop=0;
+  },300);
+}
+
+/* ══════════════════════════════════════════
+   POPULATE DASHBOARD
+══════════════════════════════════════════ */
+function populateDash(q){
+  const pb=PB[q];
+  const cd=state.cpiNow-state.cpiPrev;
+  const gd=state.gdpNow-state.gdpPrev;
+
+  document.getElementById('d-name').textContent=pb.name;
+  document.getElementById('d-sub').textContent=pb.condition+' · Policy: '+pb.policy;
+  document.getElementById('d-cpi').textContent=state.cpiNow.toFixed(1)+'%';
+  document.getElementById('d-gdp').textContent=state.gdpNow.toFixed(2)+'%';
+  document.getElementById('d-bias').textContent=pb.bias;
+
+  const cpiArr=document.getElementById('d-cpi-arr');
+  cpiArr.textContent=cd<=0?'▾':'▴';
+  cpiArr.className='trend-arr '+(cd<=0?'trend-down':'trend-up');
+
+  const gdpArr=document.getElementById('d-gdp-arr');
+  gdpArr.textContent=gd>=0?'▴':'▾';
+  gdpArr.className='trend-arr '+(gd>=0?'trend-up':'trend-down');
+
+  // ── Populate CPI tooltip ──────────────────────────
+  document.getElementById('tt-cpi-val').textContent=state.cpiNow.toFixed(1)+'%';
+  document.getElementById('tt-cpi-prior').innerHTML=
+    `<strong>${state.cpiPrev.toFixed(1)}%</strong> — prior period`;
+  const cpiDeltaStr=(cd>0?'+':'')+cd.toFixed(2)+'pp';
+  document.getElementById('tt-cpi-delta').innerHTML=
+    `<strong>${cpiDeltaStr}</strong> — Inflation ${cd<=0?'decelerating':'accelerating'}`;
+  document.getElementById('tt-cpi-verdict').innerHTML=
+    cd<=0
+      ? `Inflation is <strong>decelerating</strong>. The direction of this delta determines the x-axis of the regime model — pointing left toward Quad I or IV.`
+      : `Inflation is <strong>accelerating</strong>. This delta pushes the model rightward toward Quad II or III.`;
+
+  // ── Populate GDP tooltip ──────────────────────────
+  document.getElementById('tt-gdp-val').textContent=state.gdpNow.toFixed(2)+'%';
+  document.getElementById('tt-gdp-prior').innerHTML=
+    `<strong>${state.gdpPrev.toFixed(2)}%</strong> — prior period`;
+  const gdpDeltaStr=(gd>0?'+':'')+gd.toFixed(2)+'pp';
+  document.getElementById('tt-gdp-delta').innerHTML=
+    `<strong>${gdpDeltaStr}</strong> — Growth ${gd>=0?'accelerating':'slowing'}`;
+  document.getElementById('tt-gdp-verdict').innerHTML=
+    gd>=0
+      ? `Growth is <strong>accelerating</strong>. This delta lifts the model upward toward Quad I or II.`
+      : `Growth is <strong>slowing</strong>. The direction of this delta determines the y-axis — pointing down toward Quad III or IV.`;
+
+  const mkAssets=(arr,isGood)=>arr.map(([n,b])=>`
+    <div class="asset-row">
+      <span class="label">${n}</span>
+      <span class="badge ${isGood?'pos':'neg'}">${b}</span>
+    </div>`).join('');
+
+  document.getElementById('d-best-assets').innerHTML=mkAssets(pb.bestA,true);
+  document.getElementById('d-worst-assets').innerHTML=mkAssets(pb.worstA,false);
+  document.getElementById('d-policy-text').innerHTML=pb.policyHtml;
+
+  document.getElementById('d-best-sectors').innerHTML=pb.bestS.map(s=>`<span class="stag pos">${s}</span>`).join('');
+  document.getElementById('d-worst-sectors').innerHTML=pb.worstS.map(s=>`<span class="stag neg">${s}</span>`).join('');
+
+  document.getElementById('d-best-factors').innerHTML=mkAssets(pb.bestF,true);
+  document.getElementById('d-worst-factors').innerHTML=mkAssets(pb.worstF,false);
+  document.getElementById('d-best-fi').innerHTML=mkAssets(pb.bestFI,true);
+  document.getElementById('d-worst-fi').innerHTML=mkAssets(pb.worstFI,false);
+
+  renderHistory();
+}
+
+/* ══════════════════════════════════════════
+   HISTORY TABLE
+══════════════════════════════════════════ */
+function renderHistory(){
+  const tbody=document.getElementById('hist-body');
+  tbody.innerHTML=[...history].reverse().map(r=>{
+    const q=calcQuad(r.cpi,r.cpiP,r.gdp,r.gdpP);
+    const cd=r.cpi-r.cpiP, gd=r.gdp-r.gdpP;
+    return `<tr>
+      <td>${r.period}</td>
+      <td>${r.cpi.toFixed(1)}%</td>
+      <td>${r.gdp.toFixed(2)}%</td>
+      <td style="color:${cd>0?'rgba(210,160,160,0.8)':'rgba(180,210,180,0.8)'}">${cd>0?'+':''}${cd.toFixed(2)}%</td>
+      <td style="color:${gd>0?'rgba(180,210,180,0.8)':'rgba(210,160,160,0.8)'}">${gd>0?'+':''}${gd.toFixed(2)}%</td>
+      <td><span class="q-stamp">Q${romanNums[q]}</span></td>
+      <td style="font-style:italic">${quadNames[q]}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════
+   UPDATE DATA
+══════════════════════════════════════════ */
+function updateData(){
+  const cn=parseFloat(document.getElementById('u-cpi-now').value);
+  const cp=parseFloat(document.getElementById('u-cpi-prev').value);
+  const gn=parseFloat(document.getElementById('u-gdp-now').value);
+  const gp=parseFloat(document.getElementById('u-gdp-prev').value);
+  if([cn,cp,gn,gp].some(isNaN)) return;
+
+  state.cpiNow=cn; state.cpiPrev=cp;
+  state.gdpNow=gn; state.gdpPrev=gp;
+
+  const newQ=calcQuad(cn,cp,gn,gp);
+  const last=history[history.length-1];
+  if(cn!==last.cpi||gn!==last.gdp){
+    const d=new Date();
+    history.push({period:d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),cpi:cn,gdp:gn,cpiP:cp,gdpP:gp});
+  }
+
+  state.activeQuad=newQ;
+  activatePortal(newQ);
+
+  if(newQ!==state.activeQuad){
+    // regime changed — exit to space
+    exitDash();
+    setTimeout(()=>alert('Regime changed to '+quadNames[newQ]+'. Enter the new portal.'),500);
+  } else {
+    populateDash(newQ);
+  }
+}
+
+/* ══════════════════════════════════════════
+   INIT
+══════════════════════════════════════════ */
+state.activeQuad=calcQuad(state.cpiNow,state.cpiPrev,state.gdpNow,state.gdpPrev);
+activatePortal(state.activeQuad);
+</script>
+</body>
+</html>
